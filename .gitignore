@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase & Secrets (Never commit credentials)
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase_options.dart
+*.p8
+*.p12
+.env

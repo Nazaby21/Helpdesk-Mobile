@@ -35,7 +35,17 @@ abstract final class ApiEndpoints {
   // Images
   static const String uploadImage = '/images/upload';
 
-  // Notifications / Device Tokens
+  // Notifications
+  static const String notifications = '/notifications';
+  static const String unreadNotificationsCount = '/notifications/unread-count';
+  static String markNotificationRead(int id) => '/notifications/$id/read';
+  static const String markAllNotificationsRead = '/notifications/read-all';
+  static String deleteNotification(int id) => '/notifications/$id';
+
+  // Device Tokens (FCM)
+  static const String devices = '/devices';
+  static String unregisterDevice(String token) =>
+      '/devices/${Uri.encodeComponent(token)}';
   static const String deviceToken = '/notifications/device-token';
 
   // WebSocket / STOMP

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:helpdesk_mobile/app/constants/api_endpoints.dart';
 import 'package:helpdesk_mobile/core/network/api_client.dart';
 import 'package:helpdesk_mobile/core/network/api_error.dart';
+import 'package:helpdesk_mobile/core/services/push_notification_service.dart';
 import 'package:helpdesk_mobile/core/storage/secure_storage.dart';
 import '../../data/auth_state.dart';
 import '../../domain/user_role.dart';
@@ -10,10 +11,12 @@ class AuthController extends ChangeNotifier {
   AuthController({
     required this.storage,
     required this.apiClient,
+    this.pushNotificationService,
   });
 
   final SecureStorage storage;
   final ApiClient apiClient;
+  final PushNotificationService? pushNotificationService;
 
   AuthState _state = const AuthState();
   AuthState get state => _state;
@@ -35,10 +38,12 @@ class AuthController extends ChangeNotifier {
         userId: userId,
         email: email,
       );
+      notifyListeners();
+      await pushNotificationService?.onUserAuthenticated();
     } else {
       _state = _state.copyWith(status: AuthStatus.unauthenticated);
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   /// Performs user sign-in against the backend.
@@ -74,19 +79,23 @@ class AuthController extends ChangeNotifier {
       }
       await storage.saveUserEmail(email);
 
-      // Reconciled requirement: AuthResponse lacks user id. Fetch GET /users/me.
-      int? resolvedUserId;
-      try {
-        final meResponse = await apiClient.get(ApiEndpoints.userMe);
-        if (meResponse.data is Map<String, dynamic>) {
-          final meData = meResponse.data as Map<String, dynamic>;
-          resolvedUserId = meData['id'] as int?;
-          if (resolvedUserId != null) {
-            await storage.saveUserId(resolvedUserId);
+      // Reconciled requirement: Fetch GET /users/me if needed.
+      int? resolvedUserId = (data['id'] as num?)?.toInt();
+      if (resolvedUserId != null) {
+        await storage.saveUserId(resolvedUserId);
+      } else {
+        try {
+          final meResponse = await apiClient.get(ApiEndpoints.userMe);
+          if (meResponse.data is Map<String, dynamic>) {
+            final meData = meResponse.data as Map<String, dynamic>;
+            resolvedUserId = meData['id'] as int?;
+            if (resolvedUserId != null) {
+              await storage.saveUserId(resolvedUserId);
+            }
           }
+        } catch (_) {
+          // Non-blocking: proceed with login even if /users/me fails
         }
-      } catch (_) {
-        // Non-blocking: proceed with login even if /users/me fails
       }
 
       _state = _state.copyWith(
@@ -99,6 +108,10 @@ class AuthController extends ChangeNotifier {
         isLoading: false,
       );
       notifyListeners();
+
+      // Register FCM device token and refresh unread notifications
+      await pushNotificationService?.onUserAuthenticated();
+
       return true;
     } on ApiError catch (e) {
       _state = _state.copyWith(
@@ -117,13 +130,16 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  /// Gracefully signs out by notifying the backend and wiping local tokens.
+  /// Gracefully signs out by unregistering device token, notifying the backend, and wiping local tokens.
   Future<void> logout() async {
-    final storedRefreshToken = _state.refreshToken ?? await storage.getRefreshToken();
+    // Unregister FCM device token via DELETE /api/devices/{token} before revoking auth
+    await pushNotificationService?.onUserLogout();
+
+    final storedRefreshToken =
+        _state.refreshToken ?? await storage.getRefreshToken();
 
     if (storedRefreshToken != null && storedRefreshToken.isNotEmpty) {
       try {
-        // Backend expects { "refreshToken": "..." } in request body (Section 4.1)
         await apiClient.post(
           ApiEndpoints.logout,
           data: {'refreshToken': storedRefreshToken},

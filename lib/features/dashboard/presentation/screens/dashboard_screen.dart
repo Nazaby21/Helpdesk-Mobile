@@ -8,6 +8,7 @@ import '../../../../shared/widgets/app_error_state.dart';
 import '../../../../shared/widgets/app_loading_indicator.dart';
 import '../../../auth/domain/user_role.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../notifications/presentation/widgets/notification_bell_action.dart';
 import '../../../tickets/data/repositories/ticket_repository.dart';
 import '../../domain/models/dashboard_stats_model.dart';
 
@@ -85,10 +86,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: const Text('Helpdesk Operations'),
         actions: [
-          IconButton(
-            tooltip: 'Activity & Notifications',
-            icon: const Icon(Icons.notifications_none_rounded),
-            onPressed: () => context.push('/notifications'),
+          NotificationBellAction(
+            apiClient: widget.apiClient ?? widget.authController.apiClient,
           ),
           IconButton(
             tooltip: 'Profile',

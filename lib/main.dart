@@ -4,6 +4,7 @@ import 'app/app.dart';
 import 'app/routes/app_router.dart';
 import 'core/config/env_config.dart';
 import 'core/network/api_client.dart';
+import 'core/services/push_notification_service.dart';
 import 'core/storage/secure_storage.dart';
 import 'features/auth/presentation/controllers/auth_controller.dart';
 
@@ -21,13 +22,21 @@ void main() async {
     onSessionExpired: () => authController.handleSessionExpired(),
   );
 
+  final pushNotificationService = PushNotificationService(
+    apiClient: apiClient,
+  );
+  await pushNotificationService.initialize();
+
   authController = AuthController(
     storage: storage,
     apiClient: apiClient,
+    pushNotificationService: pushNotificationService,
   );
 
-  await authController.initialize();
   final router = createAppRouter(authController);
+  pushNotificationService.attachRouter(router);
+
+  await authController.initialize();
 
   runApp(
     ProviderScope(
